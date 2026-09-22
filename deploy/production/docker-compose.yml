@@ -1,0 +1,63 @@
+# ============================================================
+# Docker Compose — AMBIENTE PRODUÇÃO (isolado de staging)
+#   Porta: 8080 | Banco: cidades_esg
+#   Subir localmente:
+#     docker compose -f deploy/production/docker-compose.yml \
+#       --env-file deploy/production/.env up -d
+# ============================================================
+
+services:
+
+  mongodb:
+    image: mongo:7.0
+    container_name: cidades-esg-prod-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE}
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - cidades-esg-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  app:
+    image: "${IMAGE:?Defina IMAGE. Ex.: ghcr.io/usuario/cidades-esg:SHA}"
+    container_name: cidades-esg-prod-app
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SERVER_PORT: "8080"
+      MONGO_HOST: mongodb
+      MONGO_PORT: "27017"
+      MONGO_DATABASE: ${MONGO_DATABASE}
+      MONGO_USERNAME: ${MONGO_USERNAME}
+      MONGO_PASSWORD: ${MONGO_PASSWORD}
+      MONGO_AUTH_DB: ${MONGO_AUTH_DB:-admin}
+      JWT_SECRET: ${JWT_SECRET}
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    networks:
+      - cidades-esg-network
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+networks:
+  cidades-esg-network:
+    driver: bridge
+
+volumes:
+  mongo_data: {}
