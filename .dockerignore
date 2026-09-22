@@ -1,0 +1,13 @@
+# Contexto de build — arquivos desnecessários para a imagem
+.git
+.github
+target
+deploy
+docs
+*.md
+.env
+deploy/*/.env
+.gitignore
+.gitattributes
+Dockerfile
+docker-compose.yml
