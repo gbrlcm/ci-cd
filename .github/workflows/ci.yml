@@ -1,0 +1,115 @@
+# ============================================================
+# CI — Integração Contínua (Cidades ESG Inteligentes / InovaGAB_API)
+# Dispara a cada push (qualquer branch) e pull request.
+# Fluxo:
+#   1. Checkout do código
+#   2. Instalação do Java 24 (Temurin)
+#   3. Build + Testes (com MongoDB real em container de serviço)
+#   4. Empacotamento do artefato (.jar)
+#   5. Build da imagem Docker
+#   6. Publicação da imagem no GitHub Container Registry (GHCR)
+# ============================================================
+
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: ['**']
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  # ----------------------------------------------------------
+  # 1..4 — Build, Testes e Artefato
+  # ----------------------------------------------------------
+  test:
+    name: Build + Testes
+    runs-on: ubuntu-latest
+    services:
+      # MongoDB real (mesma versão usada em produção) para os testes de integração
+      mongodb:
+        image: mongo:7.0
+        env:
+          MONGO_INITDB_ROOT_USERNAME: root
+          MONGO_INITDB_ROOT_PASSWORD: secret
+          MONGO_INITDB_DATABASE: inovagab_db
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand(\"ping\").ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+          --health-start-period 20s
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v5
+
+      - name: Configurar Java 24 (Temurin)
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '24'
+          cache: maven
+
+      - name: Executar testes automatizados
+        run: ./mvnw -B test
+
+      - name: Empacotar artefato (.jar)
+        run: ./mvnw -B -DskipTests package
+
+      - name: Publicar artefato (.jar)
+        uses: actions/upload-artifact@v4
+        with:
+          name: inovagab-jar
+          path: target/*.jar
+
+  # ----------------------------------------------------------
+  # 5..6 — Build da imagem Docker + Publicação no GHCR
+  # (apenas pushes; PRs validam o Dockerfile sem publicar)
+  # ----------------------------------------------------------
+  build-image:
+    name: Build + Publicação da imagem Docker
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_full: ${{ steps.meta.outputs.image_full }}
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v5
+
+      - name: Definir metadados da imagem (repo + tag por SHA)
+        id: meta
+        run: |
+          REPO_LOWERCASE="${GITHUB_REPOSITORY,,}"
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          echo "image_full=${REGISTRY}/${REPO_LOWERCASE}:${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "image_latest=${REGISTRY}/${REPO_LOWERCASE}:latest" >> "$GITHUB_OUTPUT"
+
+      - name: Autenticar no GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configurar Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build e push da imagem
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image_full }}
+            ${{ steps.meta.outputs.image_latest }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
