@@ -1,0 +1,13 @@
+package br.com.inovagab;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.SpringBootTest;
+
+@SpringBootTest
+class InovagabApplicationTests {
+
+	@Test
+	void contextLoads() {
+	}
+
+}

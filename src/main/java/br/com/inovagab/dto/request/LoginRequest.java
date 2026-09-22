@@ -1,0 +1,14 @@
+package br.com.inovagab.dto.request;
+
+import lombok.Data;
+import jakarta.validation.constraints.NotBlank;
+
+@Data
+public class LoginRequest {
+    @NotBlank
+    private String email;
+    @NotBlank
+    private String password;
+    @NotBlank
+    private String selectedProfile; // OPERADOR, GESTOR, LIDER
+}

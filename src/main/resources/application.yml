@@ -1,0 +1,40 @@
+spring:
+  application:
+    name: inovagab
+  output:
+    ansi:
+      enabled: always
+  docker:
+    compose:
+      enabled: false
+  data:
+    mongodb:
+      database: ${MONGO_DATABASE:inovagab_db}
+      username: ${MONGO_USERNAME:root}
+      password: ${MONGO_PASSWORD:secret}
+      authentication-database: ${MONGO_AUTH_DB:admin}
+      auto-index-creation: true
+
+server:
+  port: ${SERVER_PORT:8080}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui/index.html
+  api-docs:
+    path: /v3/api-docs
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+api:
+  security:
+    token:
+      secret: ${JWT_SECRET:my-dev-secret-for-jwt-generation-which-should-be-changed-in-production}
